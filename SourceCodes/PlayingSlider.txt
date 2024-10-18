@@ -1,0 +1,106 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.Interactions;
+using UnityEngine.UI;
+
+public class PlayingSlider : MonoBehaviour
+{
+    [SerializeField] private Slider _slider;
+    [SerializeField] private AudioSource _audioSource;
+    [SerializeField] private bool _isClicked = false;
+    [SerializeField] private Text _nowTime;
+    [SerializeField] private Text _allTime;
+    public UserInput _userInput;
+    private void Awake()
+    {
+        _userInput = new UserInput();
+        _userInput.Enable();
+    }
+    // Start is called before the first frame update
+    void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        if(_audioSource.clip != null)
+        {
+            UserDrag();
+            if (_isClicked)
+            {
+
+            }
+            else
+            {
+                _slider.value = _audioSource.time / _audioSource.clip.length;
+                SetTime();
+            }
+        }
+        
+    }
+    
+    void UserDrag()
+    {
+        _userInput.PlayingSlider.Drag.performed += ctx =>
+        {
+            if(ctx.interaction is PressInteraction && EventSystem.current.currentSelectedGameObject == gameObject)
+            {
+                _isClicked = true;
+            }
+        };
+        _userInput.PlayingSlider.Drag.canceled += ctx =>
+        {
+            SetCurrentTime();
+            _isClicked = false;
+        };
+    }
+
+    private void SetCurrentTime()
+    {
+        _audioSource.time = _audioSource.clip.length * _slider.value;
+    }
+    private void SetTime()
+    {
+        string nt = "";
+        if(Math.Floor(_audioSource.time / 60) < 10 && Math.Floor(_audioSource.time / 60) >= 0)
+        {
+            nt = '0' + (Math.Floor(_audioSource.time / 60)).ToString() + ':';
+        }
+        else
+        {
+            nt = (Math.Floor(_audioSource.time / 60)).ToString() + ':';
+        }
+        if((_audioSource.time % 60) < 10 && (_audioSource.time % 60) >= 0)
+        {
+            nt += '0' + Math.Floor((_audioSource.time % 60)).ToString();
+        }
+        else
+        {
+            nt += Math.Floor((_audioSource.time % 60)).ToString();
+        }
+        _nowTime.text = nt;
+        string at = "";
+        if(Math.Floor(_audioSource.clip.length / 60) < 10 && Math.Floor(_audioSource.clip.length / 60) >= 0)
+        {
+            at = '0' + (Math.Floor(_audioSource.clip.length / 60)).ToString() + ':';
+        }
+        else
+        {
+            at = (Math.Floor(_audioSource.clip.length / 60)).ToString() + ':';
+        }
+        if((_audioSource.clip.length % 60) < 10 && (_audioSource.clip.length % 60) >= 0)
+        {
+            at += '0' + Math.Floor(_audioSource.clip.length % 60).ToString();
+        }
+        else
+        {
+            at += Math.Floor(_audioSource.clip.length % 60).ToString();
+        }
+        _allTime.text = at;
+    }
+}

@@ -1,0 +1,96 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.Security.Cryptography;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+
+public class SetSearchDetail : MonoBehaviour
+{
+    [SerializeField] private Text _songname;
+    [SerializeField] private Text _artist;
+    [SerializeField] private string _songid;
+    [SerializeField] private Button _play;
+    [SerializeField] private bool _isVip = false;
+    [SerializeField] private string _url;
+    [SerializeField] private GameObject _vip;
+    // Start is called before the first frame update
+    void Start()
+    {
+        _play.onClick.AddListener(PlayClicked);
+        _vip  = GameObject.Find("UI").transform.Find("Canvas/BackGround/Playing/VIP").gameObject;
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+    public void Setname(string songname,string artist,string id)
+    {
+        _songname.text = songname;
+        _artist.text = artist;
+        _songid = id;
+    }
+    public void PlayClicked()
+    {
+        if (PlayMusic.instance.InternatCheck() == false)
+        {
+            PlayMusic.instance.ShowInterTip();
+            return;
+        }
+        StartCoroutine(RunPython());
+    }
+    IEnumerator RunPython()
+    {
+        Process p = new Process();
+        p.StartInfo.FileName = Application.dataPath + "/Crawler.exe";
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.Arguments = "GetMusic " + _songid;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.StartInfo.RedirectStandardInput = true;
+        p.StartInfo.RedirectStandardError = true;
+        p.StartInfo.CreateNoWindow = true;
+        p.Start();
+        p.BeginOutputReadLine();
+        p.OutputDataReceived += new DataReceivedEventHandler(Out_RecvData);
+        Console.ReadLine();
+        p.WaitForExit();
+        if( _isVip  == false)
+        {
+            GetMusicUrl();
+            StartCoroutine(PlayMusic.instance.GetMusic(_url, _songname.text, _artist.text,_songid));
+            UnityEngine.Debug.Log("Done");
+        }
+        else
+        {
+            _vip.SetActive(true);
+            _vip.GetComponent<vip>().SetSpeed(1);
+        }
+        yield return p;
+    }
+    void Out_RecvData(object sender, DataReceivedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Data))
+        {
+            UnityEngine.Debug.Log(e.Data);
+            if(e.Data == "VIP")
+            {
+                UnityEngine.Debug.Log("VIP");
+                
+                _isVip = true;
+            }
+        }
+    }
+    void GetMusicUrl()
+    {
+        using (StreamReader sr = new StreamReader(Application.dataPath + "/music/musicinfo"))
+        {
+            _url = sr.ReadLine();
+            UnityEngine.Debug.Log(_url);
+        }
+    }
+}

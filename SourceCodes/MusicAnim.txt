@@ -1,0 +1,95 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class MusicAnim : MonoBehaviour
+{
+    [SerializeField] private AudioSource _audioSource;
+    [Range(1, 100)]
+    [SerializeField] private int _lerpSpeed = 20;
+    [SerializeField] private GameObject _uiParent;
+    private float[] _samples;
+    [SerializeField] private int _sampleSize = 64;
+    private List<Image> _uiList = new();
+    [SerializeField] private float _height;
+
+    private bool _ic = true;
+    private void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+        _samples = new float[_sampleSize];
+        for(int i = 0;i < _uiParent.GetComponent<RectTransform>().childCount;i++)
+        {
+            _uiList.Add(_uiParent.GetComponent<RectTransform>().GetChild(i).GetComponent<Image>());
+        }
+    }
+    private void Start()
+    {
+        _height = _uiList[0].GetComponent<RectTransform>().rect.height;
+    }
+    
+    private void Update()
+    {
+        if(_audioSource.isPlaying == false) 
+        {
+            for (int i = 0; i < _uiList.Count; i++)
+            {
+                Vector3 v = new Vector3(1, 0.01f, 1);
+                _uiList[i].transform.localScale = Vector3.Lerp(_uiList[i].transform.localScale, v, _lerpSpeed * Time.deltaTime);
+            }
+            return; 
+        }
+        _audioSource.GetOutputData(_samples, 0);
+
+        //foreach(var sample in _samples)
+        //{
+        //    Debug.Log(sample);
+        //}
+        float m = Mathf.Max(_samples);
+        for(int i = 0;i< _uiList.Count;i++)
+        {
+            Vector3 v = new Vector3(1, Mathf.Clamp(_samples[i] / 0.1f , 0 ,50) * (2f - _audioSource.volume) * 0.5f, 1);
+            _uiList[i].transform.localScale = Vector3.Lerp(_uiList[i].transform.localScale,v,_lerpSpeed * Time.deltaTime);
+            ChangeColor(_uiList[i]);
+        }
+    }
+
+
+    void ChangeColor(Image ig)
+    {
+        Debug.Log(ig.color);
+        if (ig.color.r <= 0.95 && _ic)
+        {
+            ig.color = new Color(ig.color.r + 0.001f, ig.color.g, ig.color.b, ig.color.a);
+        }
+        else if (ig.color.g <= 0.95 && _ic)
+        {
+            ig.color = new Color(ig.color.r, ig.color.g + 0.001f, ig.color.b, ig.color.a);
+        }
+        else if (ig.color.b <= 0.95 && _ic)
+        {
+            ig.color = new Color(ig.color.r, ig.color.g, ig.color.b + 0.001f, ig.color.a);
+        }
+        else
+        {
+            _ic = false;
+            if (ig.color.r >= 0.05)
+            {
+                ig.color = new Color(ig.color.r - 0.001f, ig.color.g, ig.color.b, ig.color.a);
+            }
+            else if (ig.color.g >= 0.05)
+            {
+                ig.color = new Color(ig.color.r, ig.color.g - 0.001f, ig.color.b, ig.color.a);
+            }
+            else if (ig.color.b >= 0.05)
+            {
+                ig.color = new Color(ig.color.r, ig.color.g, ig.color.b - 0.001f, ig.color.a);
+            }
+            else
+            {
+                _ic = true;
+            }
+        }
+    }
+}

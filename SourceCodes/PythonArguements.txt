@@ -1,0 +1,145 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+//using UnityEditor.Scripting.Python;
+using UnityEngine.UI;
+using System.Diagnostics;
+using System;
+using System.IO;
+
+public class PythonArguements : MonoBehaviour
+{
+    public static PythonArguements instance;
+
+    [Header("音乐搜索")]
+    [Tooltip("搜索栏")]
+    [SerializeField] private Text _keywordInput;
+    [Tooltip("关键词")]
+    public string _keyword;
+
+    [Header("搜索结果")]
+    [Tooltip("歌名")]
+    [SerializeField] private List<string> _songsName = new();
+    [Tooltip("歌手")]
+    [SerializeField] private List<string> _singersName = new();
+    [Tooltip("歌曲id")]
+    [SerializeField] private List<string> _songsId = new();
+    [Tooltip("所有结果")]
+    [SerializeField] private List<GameObject> _SreachOuput = new();
+
+    [SerializeField] private GameObject _SearchDetailPrefab;
+    [SerializeField] private Transform _SearchDetailPosition;
+
+
+    private void Awake()
+    {
+        if(instance == null)
+        {
+            instance = this;
+        }   
+        else if(instance != this)
+        {
+            Destroy(gameObject);
+        }
+    }
+
+    public void OnSearchClicked()
+    {
+        _keyword = _keywordInput.text;
+        if(string.IsNullOrEmpty(_keyword))
+        {
+            return;
+        }
+        if(PlayMusic.instance.InternatCheck() == false)
+        {
+            PlayMusic.instance.ShowInterTip();
+            return;
+        }
+        //string SearchPythonFilePath = Application.dataPath + "/Python/Search.py";
+        //PythonRunner.RunFile(SearchPythonFilePath);
+        StartCoroutine(RunPython());
+        //SetSearchDetail();
+        _songsId.Clear();
+        _songsName.Clear();
+        _singersName.Clear();
+    }
+    private void SetSearchDetail()
+    {
+        if(_songsName.Count > 0 && _singersName.Count >0 && _songsId.Count>0) 
+        {
+            for(int i = _SreachOuput.Count - 1; i >= 0; i--)
+            {
+                Destroy(_SreachOuput[i]);
+            }
+            _SreachOuput.Clear();
+            for(int i = 0; i < _songsName.Count; i++)
+            {
+                GameObject gameObject = Instantiate(_SearchDetailPrefab, _SearchDetailPosition);
+                gameObject.GetComponent<SetSearchDetail>().Setname(_songsName[i], _singersName[i], _songsId[i]);
+                _SreachOuput.Add(gameObject);
+            }
+        }
+    }
+    IEnumerator RunPython()
+    {
+        Process p = new Process();
+        p.StartInfo.FileName = Application.dataPath + "/Crawler.exe";
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.Arguments = "GetInfo " + _keyword;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.StartInfo.RedirectStandardInput = true;
+        p.StartInfo.RedirectStandardError = true;
+        p.StartInfo.CreateNoWindow = true;
+        p.Start();
+        p.BeginOutputReadLine(); 
+        p.OutputDataReceived += new DataReceivedEventHandler(Out_RecvData);
+        Console.ReadLine();
+        p.WaitForExit();
+        GetDetail();
+        yield return p;
+    }
+
+    static void Out_RecvData(object sender, DataReceivedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Data))
+        {
+            UnityEngine.Debug.Log(e.Data);
+
+        }
+    }
+    private void GetDetail()
+    {
+        try
+        {
+            _songsName.Clear();
+            _songsId.Clear();
+            _singersName.Clear();
+            using (StreamReader sr = new StreamReader(Application.dataPath + "/music/musicinfo"))
+            {
+                string l;
+                l = sr.ReadToEnd();
+                string[] ls = l.Split('\n');
+                UnityEngine.Debug.Log(ls.Length);
+                int ms = (ls.Length - 1) / 3;
+                for(int i = 0; i < ms; i++)
+                {
+                    _songsName.Add(ls[i]);
+                }
+                for(int i = ms; i < 2*ms; i++)
+                {
+                    _singersName.Add(ls[i]);
+                }
+                for(int i = 2*ms;i < 3*ms; i++)
+                {
+                    _songsId.Add(ls[i]);
+                }
+            }
+            UnityEngine.Debug.Log(_songsId.Count);
+            SetSearchDetail();
+        }
+        catch(Exception e)
+        {
+            UnityEngine.Debug.Log(e.ToString());
+        }
+    }
+}

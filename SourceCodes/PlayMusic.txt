@@ -1,0 +1,405 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using UnityEngine;
+using UnityEngine.Networking;
+using UnityEngine.UI;
+
+
+public class PlayMusic : MonoBehaviour
+{
+    public static PlayMusic instance;
+    [SerializeField] private AudioSource _audioSource;
+    public List<AudioClip> _audioClips;
+    [SerializeField] private Text _songname;
+    [Tooltip("0为播放图，1为暂停图")]
+    [SerializeField] private List<Sprite> _playAndPauseImg;
+    [SerializeField] private Image _playButtonImg;
+    [SerializeField] private Transform _playingListPosition;
+    [SerializeField] private GameObject _playingListCell;
+    [SerializeField] private int _index;
+    [SerializeField] private List<GameObject> _playingList = new();
+    [SerializeField] private Dictionary<string, string> _musicDetail = new();
+    [SerializeField] private string _playingMusic;
+    [SerializeField] private Text _lyric;
+    [SerializeField] private GameObject _interWarning;
+
+    bool _ic = false;
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else if (instance != this)
+        {
+            Destroy(gameObject);
+        }
+        _audioSource = GetComponent<AudioSource>();
+    }
+    private void Start()
+    {
+        _audioSource.Stop();
+        _audioSource.loop = false;
+        _playButtonImg.sprite = _playAndPauseImg[0];
+        
+    }
+    private void Update()
+    {
+        if (_audioSource.isPlaying)
+        {
+            _playButtonImg.sprite = _playAndPauseImg[1];
+        }
+        else
+        {
+            _playButtonImg.sprite = _playAndPauseImg[0];
+        }
+        if (_audioSource.clip != null && _audioSource.clip.name != _playingMusic)
+        {
+            _playingMusic = _audioSource.clip.name;
+            UnityEngine.Debug.Log(_playingMusic);
+            SetMusicDetail();
+        }
+        StartCoroutine(CI());
+
+
+    }
+    private void SetMusicDetail()
+    {
+        if (string.IsNullOrEmpty(_musicDetail[_playingMusic]) == false)
+        {
+            if (PlayMusic.instance.InternatCheck() == false)
+            {
+                PlayMusic.instance.ShowInterTip();
+                return;
+            }
+            UnityEngine.Debug.Log("start getting lyric");
+            StartCoroutine(GetLyric(_musicDetail[_playingMusic]));
+        }
+        else
+        {
+            _lyric.text = "暂无歌词";
+        }
+    }
+    IEnumerator GetLyric(string id)
+    {
+        Process p = new();
+        p.StartInfo.FileName = Application.dataPath + "/Analyse.exe";
+
+        p.StartInfo.UseShellExecute = false;
+        p.StartInfo.Arguments = id;
+        p.StartInfo.RedirectStandardOutput = true;
+        p.StartInfo.RedirectStandardInput = true;
+        p.StartInfo.RedirectStandardError = true;
+        p.StartInfo.CreateNoWindow = true;
+        p.Start();
+        UnityEngine.Debug.Log("getting lyric");
+        p.BeginOutputReadLine();
+        p.OutputDataReceived += new DataReceivedEventHandler(Out_RecvData);
+        Console.ReadLine();
+        p.WaitForExit();
+        SetLyric();
+        yield return p;
+    }
+    void Out_RecvData(object sender, DataReceivedEventArgs e)
+    {
+        if (!string.IsNullOrEmpty(e.Data))
+        {
+            UnityEngine.Debug.Log(e.Data);
+
+        }
+    }
+    void SetLyric()
+    {
+        using (StreamReader sr = new StreamReader(Application.dataPath + "/music/musiclyric"))
+        {
+            string line = sr.ReadToEnd();
+            line.Remove(line.Length - 1);
+            UnityEngine.Debug.Log(line);
+            _lyric.text = line;
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        //列表循环
+        if (_audioClips.Count != 0 && _audioSource.loop == false && _audioSource.clip.length - _audioSource.time <= 0.1f)
+        {
+            UnityEngine.Debug.Log("jieshu");
+            if (_index == _audioClips.Count - 1)
+            {
+                SetMusicSource();
+            }
+            else
+            {
+                PlayNext();
+            }
+
+        }
+    }
+
+    public void PlayOnClicked()
+    {
+        if (_audioSource.clip == null) { return; }
+        if (_audioSource.isPlaying)
+        {
+            _audioSource.Pause();
+
+        }
+        else
+        {
+            _songname.text = _audioSource.clip.name;
+            _audioSource.Play();
+
+        }
+    }
+    public void SetPlayingMusic(string name)
+    {
+        int i = 0;
+        for (; i < _audioClips.Count; i++)
+        {
+            if (_audioClips[i].name == name)
+            {
+                _index = i;
+                break;
+            }
+        }
+        _audioSource.Stop();
+        _audioSource.time = 0;
+        _audioSource.clip = _audioClips[i];
+        _songname.text = _audioSource.clip.name;
+        _audioSource.Play();
+    }
+
+    private void SetMusicSource()
+    {
+        if (_audioClips.Count > 0)
+        {
+            _audioSource.Stop();
+            _audioSource.time = 0;
+            _audioSource.clip = _audioClips[0];
+            _index = 0;
+            _songname.text = _audioSource.clip.name;
+            _audioSource.Play();
+        }
+    }
+    public IEnumerator GetMusic(string url, string songname, string artist, string id)
+    {
+        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip(url, AudioType.MPEG))
+
+        {
+
+            yield return uwr.SendWebRequest();
+
+            if (uwr.isNetworkError)
+            {
+
+                UnityEngine.Debug.LogError(uwr.error);
+            }
+            else
+            {
+                var clip = DownloadHandlerAudioClip.GetContent(uwr);
+                clip.name = artist + "--" + songname;
+                UnityEngine.Debug.Log(clip.name);
+                if (_audioClips.Count == 0)
+                {
+                    _audioClips.Add(DownloadHandlerAudioClip.GetContent(uwr));
+                }
+                else
+                {
+                    if (SearchMusicInList(clip) == false)
+                    {
+                        _audioClips.Insert(0, DownloadHandlerAudioClip.GetContent(uwr));
+                    }
+                    else
+                    {
+                        foreach (var clipp in _audioClips)
+                        {
+                            if (clipp.name == clip.name)
+                            {
+                                _audioClips.Remove(clipp);
+                                break;
+                            }
+                        }
+                        _audioClips.Insert(0, DownloadHandlerAudioClip.GetContent(uwr));
+                    }
+                }
+                AddPlayingList(clip.name, id);
+                SetMusicSource();
+            }
+        }
+    }
+    public void LoadMusic(string musicpath)
+    {
+        StartCoroutine(EncodeMusic(musicpath));
+    }
+    private IEnumerator EncodeMusic(string path)
+    {
+        AudioType type = AudioType.MPEG;
+        UnityEngine.Debug.Log(path);
+        switch (Path.GetExtension(path))
+        {
+            case ".wav":
+                {
+                    type = AudioType.WAV;
+                    break;
+                }
+            case ".xm":
+                {
+                    type = AudioType.XM;
+                    break;
+                }
+            case ".mp3":
+                {
+                    type = AudioType.MPEG;
+                    break;
+                }
+            case ".it":
+                {
+                    type = AudioType.IT;
+                    break;
+                }
+            case ".s3m":
+                {
+                    type = AudioType.S3M;
+                    break;
+                }
+            case ".aiff":
+                {
+                    type = AudioType.AIFF;
+                    break;
+                }
+            default:
+                {
+                    yield return null;
+                    break;
+                }
+        }
+        using (UnityWebRequest uwr = UnityWebRequestMultimedia.GetAudioClip("file://" + path, type))
+
+        {
+
+            yield return uwr.SendWebRequest();
+
+            if (uwr.isNetworkError)
+            {
+
+                UnityEngine.Debug.LogError(uwr.error);
+            }
+            else
+            {
+                var clip = DownloadHandlerAudioClip.GetContent(uwr);
+                clip.name = path.Remove(0, path.LastIndexOf('\\') + 1);
+                clip.name = clip.name.Substring(0, clip.name.LastIndexOf('.'));
+                if (_audioClips.Count == 0)
+                {
+                    _audioClips.Add(DownloadHandlerAudioClip.GetContent(uwr));
+                }
+                else
+                {
+                    if (SearchMusicInList(clip) == false)
+                    {
+                        _audioClips.Insert(0, DownloadHandlerAudioClip.GetContent(uwr));
+                    }
+                    else
+                    {
+                        foreach (var clipp in _audioClips)
+                        {
+                            if (clipp.name == clip.name)
+                            {
+                                _audioClips.Remove(clipp);
+                                break;
+                            }
+                        }
+                        _audioClips.Insert(0, DownloadHandlerAudioClip.GetContent(uwr));
+                    }
+                }
+                AddPlayingList(clip.name, "");
+                SetMusicSource();
+            }
+        }
+    }
+    public bool SearchMusicInList(AudioClip audioClip)
+    {
+        foreach (var clip in _audioClips)
+        {
+            if (clip.name == audioClip.name)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    private void AddPlayingList(string name, string id)
+    {
+        if (_playingList.Count > 0)
+        {
+            foreach (var cell in _playingList)
+            {
+                if (cell.GetComponent<PlaingListCell>().GetDetail() == name)
+                {
+                    _playingList.Remove(cell);
+                    Destroy(cell);
+                    break;
+                }
+            }
+        }
+        GameObject g = Instantiate(_playingListCell, _playingListPosition);
+        g.GetComponent<PlaingListCell>().SetDetail(name);
+        _playingList.Add(g);
+        _musicDetail.Add(name, id);
+    }
+    public void PlayBefore()
+    {
+        if (_audioClips.Count == 0) { return; }
+        _index--;
+        _index = _index >= 0 ? _index : 0;
+        _audioSource.time = 0;
+        _audioSource.clip = _audioClips[_index];
+        _audioSource.Play();
+        _songname.text = _audioSource.clip.name;
+    }
+    public void PlayNext()
+    {
+        if (_audioClips.Count == 0) { return; }
+        _index++;
+        _index = _index <= _audioClips.Count - 1 ? _index : _audioClips.Count - 1;
+        _audioSource.time = 0;
+        _audioSource.clip = _audioClips[_index];
+        _audioSource.Play();
+        _songname.text = _audioSource.clip.name;
+    }
+
+    public bool InternatCheck()
+    {
+
+        
+
+        return _ic;
+    }
+    public void ShowInterTip()
+    {
+        _interWarning.SetActive(true);
+        _interWarning.GetComponent<vip>().SetSpeed(1);
+    }
+
+    IEnumerator CI()
+    {
+        string p = "http://m801.music.126.net/20230627002413/e641396b847652bc1a4948026918fffa/jdymusic/obj/wo3DlMOGwrbDjj7DisKw/19393177459/b738/d5bd/3457/63d1f2c5eebd715bfec96dec84758fd9.mp3";
+        using (UnityWebRequest wb = UnityWebRequestMultimedia.GetAudioClip(p, AudioType.MPEG))
+        {
+            yield return wb.SendWebRequest();
+            if (wb.result == UnityWebRequest.Result.ConnectionError)
+            {
+                _ic = false;
+            }
+            else
+            {
+                _ic = true;
+            }
+        }
+        
+    }
+}

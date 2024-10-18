@@ -1,0 +1,36 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class LoopTik : MonoBehaviour
+{
+    [SerializeField] private Toggle _toggle;
+    [SerializeField] private GameObject _img;
+    [SerializeField] private AudioSource _audioSource;
+    // Start is called before the first frame update
+    void Start()
+    {
+        _toggle = GetComponent<Toggle>();
+        _toggle.onValueChanged.AddListener(ToggleEvent);
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
+    private void ToggleEvent(bool isOn)
+    {
+        if (isOn)
+        {
+            _img.SetActive(true);
+            _audioSource.loop = true;
+        }
+        else
+        {
+            _img.SetActive(false);
+            _audioSource.loop = false;
+        }
+    }
+}

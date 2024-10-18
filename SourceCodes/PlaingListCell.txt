@@ -1,0 +1,25 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.UI;
+
+public class PlaingListCell : MonoBehaviour
+{
+    [SerializeField] private Text _name;
+    private void Start()
+    {
+        
+    }
+    public void SetDetail(string name)
+    {
+        _name.text = name;
+    }
+    public void PlayOnClicked()
+    {
+        PlayMusic.instance.SetPlayingMusic(_name.text);
+    }
+    public string GetDetail()
+    {
+        return _name.text;
+    }
+}

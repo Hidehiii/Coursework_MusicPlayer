@@ -1,0 +1,167 @@
+import sys
+import requests
+import os
+import json
+import urllib
+from urllib.request import urlretrieve
+import random
+import math
+import base64
+from Crypto.Cipher import AES
+import codecs
+#coding=UTF-8
+
+
+def generate_str(lenght):
+    '获取一个随意字符串，length是字符串长度'
+    str = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    res = ''
+    for i in range(lenght):
+        '获取一个字符串长度的随机数'
+        index = random.random() * len(str)
+        '向下取整'
+        index = math.floor(index)
+        '累加成一个随机字符串'
+        res = res + str[index]
+    return res
+
+
+def AES_encrypt(text, key):
+    'AES加密获得params'
+    'iv偏移量'
+    iv = '0102030405060708'.encode('utf-8')
+    '将明文转换为utf-8格式'
+    text = text.encode('utf-8')
+    pad = 16 - len(text) % 16
+    '明文需要转成二进制，且可以被16整除'
+    text = text + (pad * chr(pad)).encode('utf-8')
+    '将密钥转换为utf-8格式'
+    key = key.encode('utf-8')
+    '创建一个AES对象'
+    encryptor = AES.new(key, AES.MODE_CBC, iv)
+    '加密'
+    encrypt_text = encryptor.encrypt(text)
+    'base4编码转换为byte字符串'
+    encrypt_text = base64.b64encode(encrypt_text)
+    return encrypt_text.decode('utf-8')
+
+def RSA_encrypt(str, key, f):
+    'RSA加密获得encSeckey'
+    '随机字符串逆序排列'
+    str = str[::-1]
+    '将随机字符串转换为byte类型的数据'
+    str = bytes(str, 'utf-8')
+    'RSA加密'
+    sec_key = int(codecs.encode(str, encoding='hex'), 16) ** int(key, 16) % int(f, 16)
+    'RSA加密后字符串长度为256，不足的补x'
+    return format(sec_key, 'x').zfill(256)
+
+def get_params(d, e, f, g):
+    '获取参数'
+    '生成一个16位的随机字符串'
+    i = generate_str(16)
+    # i = 'aO6mqZksdJbqUygP'
+    encText = AES_encrypt(d, g)
+    'AES加密两次后获得params'
+    params = AES_encrypt(encText, i)
+    'RSA加密后获得encSecKey'
+    encSecKey = RSA_encrypt(i, e, f)
+    return params, encSecKey
+
+e = '010001'
+f = '00e0b509f6259df8642dbc35662901477df22677ec152b5ff68ace615bb7b725152b3ab17a876aea8a5aa76d2e417629ec4ee341f56135fccf695280104e0312ecbda92557c93870114af6c9d05c4f7f0c3685b7a46bee255932575cce10b424d813cfe4875d3e82047b97ddef52741d546b8e289dc6935b3ece0462db0a22b8e7'
+g = '0CoJUm6Qyw8W8jud'
+
+' 传入msg和url,获取返回的json数据'
+def get_data(msg, url):
+    encText, encSecKey = get_params(msg, e, f, g)
+    params = {
+        "params": encText,
+        "encSecKey": encSecKey
+    }
+    res = requests.post(url=url, params=params, verify=False)
+    return res.json()
+
+
+
+
+class Crawler:
+    def __init__(self):
+        self.musicnames = []
+        self.artists = []
+        self.musicid = []
+        if not os.path.exists("./音乐播放器_Data/music"):
+            self.CreateFloader()
+    '''
+    获取音乐名字
+    '''
+    def GetMusicInfo(self,musicName):
+        serch_msg = r'{"hlpretag":"<span class=\"s-fc7\">","hlposttag":"</span>","s":"' + musicName + r'","type":"1","offset":"0","total":"true","limit":"30","csrf_token":""}'
+        serch_url = 'https://music.163.com/weapi/cloudsearch/get/web?csrf_token='
+        response = get_data(serch_msg, serch_url)
+        for i in range(len(response['result']['songs'])):
+            self.musicnames.append(response['result']['songs'][i]['name'])
+            self.artists.append(response['result']['songs'][i]['ar'][0]['name'])
+            self.musicid.append(response['result']['songs'][i]['id'])
+        return self.musicnames,self.artists,self.musicid
+
+    def GetSongsName(self):
+        return self.musicnames
+    def GetArtists(self):
+        return self.artists
+    def GetMusicId(self):
+        return self.musicid
+
+    '''
+    获取音乐源
+    '''
+    def GetMusicSource(self,musicid):
+        '''
+        音乐下载地址，level代表音质等级，encodeType代表编码类型，flac可存储无损音质，目前无法下载无损音乐
+        音质 standard标准 higher较高 exhigh极高 lossless无损 hires
+        编码类型 aac flac
+        '''
+        song_msg = '{"ids":"[' + str(musicid) + ']","level":"standard","encodeType":"flac","csrf_token":""}'
+        song_url = 'https://music.163.com/weapi/song/enhance/player/url/v1?csrf_token='
+        musicaddress = get_data(song_msg, song_url)
+        ' data[0]里的URL就是音乐下载地址 '
+        try:
+            downurl = musicaddress['data'][0]['url']
+            #urlretrieve(url=downurl, filename="./music/" + musicid + ".mp3")
+            return downurl
+        except:
+            '如果返回这个则说明需要VIP播放，无法下载'
+            return False
+
+    '''
+    创建保存音乐文件的文件夹
+    '''
+    def CreateFloader(self):
+        os.mkdir("./音乐播放器_Data/music")
+
+
+
+if __name__ == "__main__":
+    a = Crawler()
+    if sys.argv[1] == "GetInfo":
+        q = ''
+        for i in range(2,len(sys.argv)):
+            q += sys.argv[i]
+            q += ' '
+        b,c,d = a.GetMusicInfo(q)
+        with open("./音乐播放器_Data/music/musicinfo", "w",encoding='UTF-8') as f:
+            for i in b:
+                f.write(i + '\n')
+            for i in c:
+                f.write(i + '\n')
+            for i in d:
+                f.write(str(i) + '\n')
+        print("End")
+    elif sys.argv[1] == "GetMusic":
+        p = a.GetMusicSource(str(sys.argv[2]))
+        if  p == False or p == None:
+            print("VIP")
+        else:
+            with open("./音乐播放器_Data/music/musicinfo", "w", encoding='UTF-8') as f:
+                f.write(p)
+            print("OK")

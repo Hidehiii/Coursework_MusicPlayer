@@ -1,0 +1,27 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class vip : MonoBehaviour
+{
+    private Animator _animator;
+    // Start is called before the first frame update
+    void Start()
+    {
+        _animator = GetComponent<Animator>();
+    }
+
+    public void AnimEnd()
+    {
+        gameObject.SetActive(false);
+        _animator.speed = 0;
+    }
+    public void SetSpeed(float s)
+    {
+        if(_animator ==  null)
+        {
+            return;
+        }
+        _animator.speed = s;
+    }
+}
